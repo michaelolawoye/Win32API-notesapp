@@ -24,6 +24,7 @@
     <ProjectGuid>{1eb09b62-9b87-4a7c-81f9-7ad5d911cb7d}</ProjectGuid>
     <RootNamespace>NewPrg</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>TestingAPI</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
