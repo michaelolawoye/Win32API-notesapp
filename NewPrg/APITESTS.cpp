@@ -53,10 +53,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     UpdateWindow(hwnd);
 
     // Step 3: The Message Loop
-    while (GetMessage(&Msg, NULL, 0, 0) > 0) {
+    while (TRUE) {
 
-        TranslateMessage(&Msg);
-        DispatchMessage(&Msg);
+        if (PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE)) {
+            if (Msg.message == WM_QUIT)
+                break;
+
+            TranslateMessage(&Msg);
+            DispatchMessage(&Msg);
+        }
+        else
+            printf("hello");   
     }
 
     return Msg.wParam;
@@ -70,6 +77,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     TEXTMETRIC tm;
     SCROLLINFO si;
     POINT pt;
+    SIZE sz;
     static int cxChar, cyChar, cxCaps;
     static int cxClient, cyClient, maxWidth;
     static int vScrollPos, hScrollPos;
@@ -94,31 +102,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     
     case WM_PAINT:
     {
-        HPEN dotPen = CreatePen(PS_DOT, 0, RGB(0, 255, 0));
-        HPEN dashPen = CreatePen(PS_DASH, 0, RGB(200, 200, 0));
-        LOGBRUSH logBrush = {BS_SOLID, RGB(0, 0, 0), NULL};
-        HBRUSH exBrush = CreateBrushIndirect(&logBrush);
-        int xborder = cxClient / 10;
-        int yborder = cyClient / 10;
-
         hdc = BeginPaint(hwnd, &ps);
-        
-        SelectObject(hdc, dashPen);
-
-
-        Rectangle(hdc, xborder, yborder, cxClient-xborder, cyClient - yborder);
-
-        SelectObject(hdc, dotPen);
-
-        MoveToEx(hdc, xborder, yborder, NULL);
-        Chord(hdc, xborder-cxClient, yborder, cxClient - xborder, 2 * (cyClient - yborder),
-            cxClient-xborder, cyClient-yborder, xborder, yborder);
 
         EndPaint(hwnd, &ps);
-
-        DeleteObject(dotPen);
-        DeleteObject(dashPen);
-        DeleteObject(exBrush);
         return 0;
     }
 
