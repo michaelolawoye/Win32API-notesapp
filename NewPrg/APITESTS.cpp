@@ -1,17 +1,23 @@
 #include <windows.h>
 #include <stdio.h>
 #include <math.h>
+#include <time.h>
 
 #include "DEVCAPS.h"
 
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+RECT* randRect(HWND);
+void PrintRect(HWND hwnd, RECT* rect);
+
 
 const TCHAR g_szClassName[] = TEXT("APITESTS");
+int cxClient, cyClient;
 
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow) {
 
+    srand(time(NULL));
     WNDCLASS wclass;
     HWND hwnd;
     MSG Msg;
@@ -39,7 +45,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
         WS_EX_CLIENTEDGE,
         g_szClassName,
         TEXT("The title of my window"),
-        WS_OVERLAPPEDWINDOW | WS_VSCROLL | WS_HSCROLL,
+        WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, 500, 360,
         NULL, NULL, hInstance, NULL);
 
@@ -62,8 +68,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
             TranslateMessage(&Msg);
             DispatchMessage(&Msg);
         }
-        else
-            printf("hello");   
+        else {
+            
+            PrintRect(hwnd, randRect(hwnd));
+        }
+
     }
 
     return Msg.wParam;
@@ -71,162 +80,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 
 // Step 4: the Window Procedure
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    HDC hdc;
-    PAINTSTRUCT ps;
+
     RECT rect;
-    TEXTMETRIC tm;
-    SCROLLINFO si;
-    POINT pt;
-    SIZE sz;
-    static int cxChar, cyChar, cxCaps;
-    static int cxClient, cyClient, maxWidth;
-    static int vScrollPos, hScrollPos;
-    TCHAR szBuffer[10];
-
-    si.cbSize = sizeof(SCROLLINFO);
-
+    PAINTSTRUCT ps;
     switch (msg) {
-    case WM_CREATE:
-    {
-        hdc = GetDC(hwnd);
-        GetTextMetrics(hdc, &tm);
-        cxChar = tm.tmAveCharWidth;
-        cxCaps = (tm.tmPitchAndFamily & 1 ? 3 : 2) * cxChar / 2;
-        cyChar = tm.tmHeight + tm.tmExternalLeading;
-        ReleaseDC(hwnd, hdc);
-
-        maxWidth = 40 * cxChar + 22 * cxCaps;
-
-        return 0;
-    }
-    
-    case WM_PAINT:
-    {
-        hdc = BeginPaint(hwnd, &ps);
-
-        EndPaint(hwnd, &ps);
-        return 0;
-    }
 
     case WM_SIZE:
     {
         cxClient = LOWORD(lParam);
         cyClient = HIWORD(lParam);
-
-        si.fMask = SIF_RANGE | SIF_PAGE;
-        si.nMin = 0;
-        si.nMax = NUMLINES2 - 1;
-        si.nPage = cyClient / cyChar;
-        SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
-
-        si.fMask = SIF_RANGE | SIF_PAGE;
-        si.nMin = 0;
-        si.nMax = 2 + maxWidth / cxChar;
-        si.nPage = cxClient / cxChar;
-        SetScrollInfo(hwnd, SB_HORZ, &si, TRUE);
-
         return 0;
     }
 
-    case WM_VSCROLL:
+    case WM_PAINT:
 
-        si.fMask = SIF_ALL;
-        GetScrollInfo(hwnd, SB_VERT, &si);
-
-        vScrollPos = si.nPos;
-
-        switch (LOWORD(wParam))
-        {
-            case SB_LINEUP:
-                si.nPos--;
-                break;
-            case SB_LINEDOWN:
-                si.nPos++;
-                break;
-            case SB_PAGEUP:
-                si.nPos -= 5;
-                break;
-            case SB_PAGEDOWN:
-                si.nPos += 5;
-                break;
-            case SB_THUMBPOSITION:
-                break;
-            case SB_THUMBTRACK:
-                si.nPos = si.nTrackPos;
-                break;
-            case SB_TOP:
-                si.nPos = si.nMin;
-                break;
-            case SB_BOTTOM:
-                si.nPos = si.nMax;
-                break;
-            case SB_ENDSCROLL:
-                break;
-            default:
-                break;
-        }
-
-        si.fMask = SIF_POS;
-
-        SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
-        GetScrollInfo(hwnd, SB_VERT, &si);
-
-        if (si.nPos != vScrollPos) {
-            ScrollWindow(hwnd, 0, cyChar * (vScrollPos - si.nPos), NULL, NULL);
-            UpdateWindow(hwnd);
-        }
-
-        return 0;
-
-    case WM_HSCROLL:
-
-        si.fMask = SIF_ALL;
-        GetScrollInfo(hwnd, SB_HORZ, &si);
-
-        hScrollPos = si.nPos;
-
-        switch (LOWORD(wParam))
-        {
-            case SB_LINEUP:
-                si.nPos--;
-                break;
-            case SB_LINEDOWN:
-                si.nPos++;
-                break;
-            case SB_PAGEUP:
-                si.nPos -= 5;
-                break;
-            case SB_PAGEDOWN:
-                si.nPos += 5;
-                break;
-            case SB_THUMBPOSITION:
-                si.nPos = HIWORD(wParam);
-                break;
-            case SB_THUMBTRACK:
-                break;
-            case SB_TOP:
-                si.nPos = si.nMin;
-                break;
-            case SB_BOTTOM:
-                si.nPos = si.nMax;
-                break;
-            case SB_ENDSCROLL:
-                break;
-            default:
-                break;
-        }
-
-        si.fMask = SIF_POS;
-
-        SetScrollInfo(hwnd, SB_HORZ, &si, TRUE);
-        GetScrollInfo(hwnd, SB_HORZ, &si);
-
-        if (si.nPos != hScrollPos) {
-            ScrollWindow(hwnd, cxChar * (hScrollPos - si.nPos), 0, NULL, NULL);
-            UpdateWindow(hwnd);
-        }
-
-        return 0;
+        BeginPaint(hwnd, &ps);
+        EndPaint(hwnd, &ps);
+        break;
 
     case WM_CLOSE:
         DestroyWindow(hwnd);
@@ -239,4 +109,36 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
     return 0;
+}
+
+
+RECT* randRect(HWND hwnd) {
+
+    RECT rect;
+    
+    int width = rand() % cxClient;
+    int height = rand() % cyClient;
+    int left = rand() % (cxClient-width);
+    int right = left+width;
+    int top = rand() % (cyClient-height);
+    int bottom = top+height;
+    HDC hdc = GetDC(hwnd);
+
+    SetRect(&rect, left, top, right, bottom);
+
+    ReleaseDC(hwnd, hdc);
+
+    return &rect;
+
+}
+
+void PrintRect(HWND hwnd, RECT* rect) {
+
+    HDC hdc = GetDC(hwnd);
+    HBRUSH hbrush1 = CreateSolidBrush(RGB(rand() % 255, rand() % 255, rand() % 255));
+
+    FillRect(hdc, rect, hbrush1);
+
+    ReleaseDC(hwnd, hdc);
+    DeleteObject(hbrush1);
 }
