@@ -95,6 +95,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_PAINT:
 
         BeginPaint(hwnd, &ps);
+        PrintRect(hwnd, randRect(hwnd));
         EndPaint(hwnd, &ps);
         break;
 
