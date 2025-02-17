@@ -18,7 +18,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     WNDCLASS wclass;
     HWND hwnd;
     MSG Msg;
-
+    HBRUSH hbrush1 = CreateSolidBrush(RGB(169, 169, 169));
     //Step 1: Registering the Window Class
     wclass.style = CS_HREDRAW | CS_VREDRAW;
     wclass.lpfnWndProc = WndProc;
@@ -27,7 +27,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     wclass.hInstance = hInstance;
     wclass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     wclass.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wclass.hbrBackground = (HBRUSH)(COLOR_WINDOW);
+    wclass.hbrBackground = hbrush1;
     wclass.lpszMenuName = NULL;
     wclass.lpszClassName = g_szClassName;
 
@@ -77,6 +77,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     static int cxClient, cyClient, maxWidth;
     static int vScrollPos, hScrollPos;
     static int doc_row, doc_col;
+
+    HBRUSH greyHBrush = CreateSolidBrush(RGB(169, 169, 169));
+
     TCHAR szBuffer[10];
 
     si.cbSize = sizeof(SCROLLINFO);
@@ -102,6 +105,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_PAINT:
     {
         hdc = BeginPaint(hwnd, &ps);
+
+
+
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -261,23 +267,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     case WM_CHAR:
     {
+        hdc = GetDC(hwnd);
+        SelectObject(hdc, GetStockObject(SYSTEM_FIXED_FONT));
+        SetBkMode(hdc, TRANSPARENT);
         switch (wParam) {
             case '\r':
-
                 break;
             case '\t':
                 break;
             case '\b':
-                hdc = GetDC(hwnd);
                 deleteChar(hwnd, hdc, &doc_row, &doc_col, cxClient, cxChar, cyChar);
-                ReleaseDC(hwnd, hdc);
                 break;
             default:
-                hdc = GetDC(hwnd);
                 printChar(hdc, wParam, &doc_row, &doc_col, cxClient, cxChar, cyChar);
-                ReleaseDC(hwnd, hdc);
                 break;
         }
+        ReleaseDC(hwnd, hdc);
+
         break;
     }
 
@@ -296,7 +302,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 void printChar(HDC hdc, TCHAR ch, int* line, int* col, int maxWidth, int charWidth, int charHeight) {
 
-    TCHAR szBuffer[2];
+    TCHAR szBuffer[10];
     TextOut(hdc, *col, *line, szBuffer, wsprintf(szBuffer, TEXT("%c"), ch));
 
     (*col)+=charWidth;
