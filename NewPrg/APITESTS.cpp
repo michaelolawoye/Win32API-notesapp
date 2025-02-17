@@ -6,6 +6,9 @@
 
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+void printChar(HDC hdc, TCHAR ch, int* line, int* col, int maxWidth, int maxChar, int charHeight);
+void deleteChar(HWND hwnd,HDC hdc, int* line, int* col, int maxWidth, int maxChar, int charHeight);
+
 
 const TCHAR g_szClassName[] = TEXT("APITESTS");
 
@@ -73,6 +76,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     static int cxChar, cyChar, cxCaps;
     static int cxClient, cyClient, maxWidth;
     static int vScrollPos, hScrollPos;
+    static int doc_row, doc_col;
     TCHAR szBuffer[10];
 
     si.cbSize = sizeof(SCROLLINFO);
@@ -89,36 +93,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         maxWidth = 40 * cxChar + 22 * cxCaps;
 
+        doc_row = 0;
+        doc_col = 0;
+
         return 0;
     }
-    
+
     case WM_PAINT:
     {
-        HPEN dotPen = CreatePen(PS_DOT, 0, RGB(0, 255, 0));
-        HPEN dashPen = CreatePen(PS_DASH, 0, RGB(200, 200, 0));
-        LOGBRUSH logBrush = {BS_SOLID, RGB(0, 0, 0), NULL};
-        HBRUSH exBrush = CreateBrushIndirect(&logBrush);
-        int xborder = cxClient / 10;
-        int yborder = cyClient / 10;
-
         hdc = BeginPaint(hwnd, &ps);
-        
-        SelectObject(hdc, dashPen);
-
-
-        Rectangle(hdc, xborder, yborder, cxClient-xborder, cyClient - yborder);
-
-        SelectObject(hdc, dotPen);
-
-        MoveToEx(hdc, xborder, yborder, NULL);
-        Chord(hdc, xborder-cxClient, yborder, cxClient - xborder, 2 * (cyClient - yborder),
-            cxClient-xborder, cyClient-yborder, xborder, yborder);
-
         EndPaint(hwnd, &ps);
-
-        DeleteObject(dotPen);
-        DeleteObject(dashPen);
-        DeleteObject(exBrush);
         return 0;
     }
 
@@ -143,7 +127,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
 
     case WM_VSCROLL:
-
+    {
         si.fMask = SIF_ALL;
         GetScrollInfo(hwnd, SB_VERT, &si);
 
@@ -151,33 +135,33 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         switch (LOWORD(wParam))
         {
-            case SB_LINEUP:
-                si.nPos--;
-                break;
-            case SB_LINEDOWN:
-                si.nPos++;
-                break;
-            case SB_PAGEUP:
-                si.nPos -= 5;
-                break;
-            case SB_PAGEDOWN:
-                si.nPos += 5;
-                break;
-            case SB_THUMBPOSITION:
-                break;
-            case SB_THUMBTRACK:
-                si.nPos = si.nTrackPos;
-                break;
-            case SB_TOP:
-                si.nPos = si.nMin;
-                break;
-            case SB_BOTTOM:
-                si.nPos = si.nMax;
-                break;
-            case SB_ENDSCROLL:
-                break;
-            default:
-                break;
+        case SB_LINEUP:
+            si.nPos--;
+            break;
+        case SB_LINEDOWN:
+            si.nPos++;
+            break;
+        case SB_PAGEUP:
+            si.nPos -= 5;
+            break;
+        case SB_PAGEDOWN:
+            si.nPos += 5;
+            break;
+        case SB_THUMBPOSITION:
+            break;
+        case SB_THUMBTRACK:
+            si.nPos = si.nTrackPos;
+            break;
+        case SB_TOP:
+            si.nPos = si.nMin;
+            break;
+        case SB_BOTTOM:
+            si.nPos = si.nMax;
+            break;
+        case SB_ENDSCROLL:
+            break;
+        default:
+            break;
         }
 
         si.fMask = SIF_POS;
@@ -191,9 +175,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         return 0;
+    }
 
     case WM_HSCROLL:
-
+    {
         si.fMask = SIF_ALL;
         GetScrollInfo(hwnd, SB_HORZ, &si);
 
@@ -201,33 +186,33 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         switch (LOWORD(wParam))
         {
-            case SB_LINEUP:
-                si.nPos--;
-                break;
-            case SB_LINEDOWN:
-                si.nPos++;
-                break;
-            case SB_PAGEUP:
-                si.nPos -= 5;
-                break;
-            case SB_PAGEDOWN:
-                si.nPos += 5;
-                break;
-            case SB_THUMBPOSITION:
-                si.nPos = HIWORD(wParam);
-                break;
-            case SB_THUMBTRACK:
-                break;
-            case SB_TOP:
-                si.nPos = si.nMin;
-                break;
-            case SB_BOTTOM:
-                si.nPos = si.nMax;
-                break;
-            case SB_ENDSCROLL:
-                break;
-            default:
-                break;
+        case SB_LINEUP:
+            si.nPos--;
+            break;
+        case SB_LINEDOWN:
+            si.nPos++;
+            break;
+        case SB_PAGEUP:
+            si.nPos -= 5;
+            break;
+        case SB_PAGEDOWN:
+            si.nPos += 5;
+            break;
+        case SB_THUMBPOSITION:
+            si.nPos = HIWORD(wParam);
+            break;
+        case SB_THUMBTRACK:
+            break;
+        case SB_TOP:
+            si.nPos = si.nMin;
+            break;
+        case SB_BOTTOM:
+            si.nPos = si.nMax;
+            break;
+        case SB_ENDSCROLL:
+            break;
+        default:
+            break;
         }
 
         si.fMask = SIF_POS;
@@ -241,6 +226,60 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         return 0;
+    }
+
+    case WM_KEYDOWN:
+    {
+        switch (wParam) {
+        case VK_HOME:
+            SendMessage(hwnd, WM_HSCROLL, SB_TOP, 0);
+            break;
+        case VK_END:
+            SendMessage(hwnd, WM_HSCROLL, SB_BOTTOM, 0);
+            break;
+        case VK_PRIOR:
+            SendMessage(hwnd, WM_VSCROLL, SB_PAGEUP, 0);
+            break;
+        case VK_NEXT:
+            SendMessage(hwnd, WM_VSCROLL, SB_PAGEDOWN, 0);
+            break;
+        case VK_UP:
+            SendMessage(hwnd, WM_VSCROLL, SB_LINEUP, 0);
+            break;
+        case VK_DOWN:
+            SendMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, 0);
+            break;
+        case VK_LEFT:
+            SendMessage(hwnd, WM_HSCROLL, SB_LINELEFT, 0);
+            break;
+        case VK_RIGHT:
+            SendMessage(hwnd, WM_HSCROLL, SB_LINERIGHT, 0);
+            break;
+        }
+        break;
+    }
+
+    case WM_CHAR:
+    {
+        switch (wParam) {
+            case '\r':
+
+                break;
+            case '\t':
+                break;
+            case '\b':
+                hdc = GetDC(hwnd);
+                deleteChar(hwnd, hdc, &doc_row, &doc_col, cxClient, cxChar, cyChar);
+                ReleaseDC(hwnd, hdc);
+                break;
+            default:
+                hdc = GetDC(hwnd);
+                printChar(hdc, wParam, &doc_row, &doc_col, cxClient, cxChar, cyChar);
+                ReleaseDC(hwnd, hdc);
+                break;
+        }
+        break;
+    }
 
     case WM_CLOSE:
         DestroyWindow(hwnd);
@@ -253,4 +292,36 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
     return 0;
+}
+
+void printChar(HDC hdc, TCHAR ch, int* line, int* col, int maxWidth, int charWidth, int charHeight) {
+
+    TCHAR szBuffer[2];
+    TextOut(hdc, *col, *line, szBuffer, wsprintf(szBuffer, TEXT("%c"), ch));
+
+    (*col)+=charWidth;
+    if (*col > maxWidth-charWidth) {
+        (*line)+=charHeight;
+        *col = 0;
+    }
+}
+
+void deleteChar(HWND hwnd, HDC hdc, int* line, int* col, int maxWidth, int charWidth, int charHeight) {
+
+    RECT rect;
+
+    (*col)-=charWidth;
+
+    if (*col < 0) {
+        (*line) -= charHeight;
+        (*col) = maxWidth-charWidth;
+    }
+    if (*line < 0) {
+        *line = 0;
+        *col = 0;
+    }
+
+    SetRect(&rect, *col, *line, *col + charWidth, *line + charHeight);
+    InvalidateRect(hwnd, &rect, TRUE);
+
 }
