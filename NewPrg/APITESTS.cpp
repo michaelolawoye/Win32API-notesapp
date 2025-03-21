@@ -4,11 +4,38 @@
 
 #include "DEVCAPS.h"
 
+#define LINE_COUNT 20
+#define BUF_SIZE 50
+
+
+// Info on caret position
+typedef struct Caret {
+    int row;
+    int col;
+    int prev_col;
+} Caret;
+
+// info on text metrics
+typedef struct textInfo {
+    int maxLineWidth;
+    TEXTMETRIC tm;
+} TextInfo;
+
+typedef struct gapBuffer {
+    char* txt_start;
+    char* buffer;
+    char* buffer_end;
+    int size;
+    int buffer_pos;
+} GapBuffer, *GapBufferPtr;
+
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
-void printChar(HDC hdc, TCHAR ch, int* line, int* col, int maxWidth, int maxChar, int charHeight);
-void deleteChar(HWND hwnd,HDC hdc, int* line, int* col, int maxWidth, int maxChar, int charHeight);
-
+void printChar(HDC, TCHAR, Caret*, GapBuffer, TextInfo);
+void deleteChar(HWND, HDC, Caret*, GapBuffer, TextInfo);
+void adjustCaretPos(Caret*, GapBuffer, int x_change, int y_change, TextInfo);
+void printBuffer(HDC, GapBuffer, TextInfo);
+int resizeBuffer(GapBuffer);
 
 const TCHAR g_szClassName[] = TEXT("APITESTS");
 
@@ -18,7 +45,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     WNDCLASS wclass;
     HWND hwnd;
     MSG Msg;
-    HBRUSH hbrush1 = CreateSolidBrush(RGB(169, 169, 169));
+
     //Step 1: Registering the Window Class
     wclass.style = CS_HREDRAW | CS_VREDRAW;
     wclass.lpfnWndProc = WndProc;
@@ -27,7 +54,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     wclass.hInstance = hInstance;
     wclass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     wclass.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wclass.hbrBackground = hbrush1;
+    wclass.hbrBackground = CreateSolidBrush(RGB(169, 169, 169));
     wclass.lpszMenuName = NULL;
     wclass.lpszClassName = g_szClassName;
 
@@ -62,7 +89,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
         DispatchMessage(&Msg);
     }
 
-    return Msg.wParam;
+    return (int)Msg.wParam;
 }
 
 // Step 4: the Window Procedure
@@ -75,8 +102,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     POINT pt;
     static int cxChar, cyChar, cxCaps;
     static int cxClient, cyClient, maxWidth;
-    static int vScrollPos, hScrollPos;
-    static int doc_row, doc_col;
+    static int vScrollPos, hScrollPos;;
+    static Caret caret;
+    static TextInfo ti;
+    static GapBuffer gapbuffer;
 
     HBRUSH greyHBrush = CreateSolidBrush(RGB(169, 169, 169));
 
@@ -88,16 +117,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_CREATE:
     {
         hdc = GetDC(hwnd);
+
         GetTextMetrics(hdc, &tm);
+
         cxChar = tm.tmAveCharWidth;
         cxCaps = (tm.tmPitchAndFamily & 1 ? 3 : 2) * cxChar / 2;
         cyChar = tm.tmHeight + tm.tmExternalLeading;
+
         ReleaseDC(hwnd, hdc);
 
         maxWidth = 40 * cxChar + 22 * cxCaps;
 
-        doc_row = 0;
-        doc_col = 0;
+        caret.row = 0;
+        caret.col = 0;
+
+        // initializes empty gapbuffer
+        gapbuffer.txt_start = (char*)calloc(BUF_SIZE, sizeof(char));
+        gapbuffer.buffer_end = gapbuffer.txt_start+BUF_SIZE-1;
+        gapbuffer.buffer = gapbuffer.txt_start;
+        gapbuffer.size = BUF_SIZE;
+
+        ti.height = tm.tmHeight;
+        ti.width = tm.tmAveCharWidth;
+
 
         return 0;
     }
@@ -128,6 +170,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         si.nMax = 2 + maxWidth / cxChar;
         si.nPage = cxClient / cxChar;
         SetScrollInfo(hwnd, SB_HORZ, &si, TRUE);
+
+        ti.maxLineWidth = cxClient;
 
         return 0;
     }
@@ -236,12 +280,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     case WM_KEYDOWN:
     {
+        hdc = GetDC(hwnd);
+        GetTextMetrics(hdc, &tm);
+
+        long char_width, char_height;
+        char_height = tm.tmHeight;
+        char_width = tm.tmAveCharWidth;
+
         switch (wParam) {
         case VK_HOME:
-            SendMessage(hwnd, WM_HSCROLL, SB_TOP, 0);
+            adjustCaretPos(&caret, gapbuffer, -1, 0, ti);
             break;
         case VK_END:
-            SendMessage(hwnd, WM_HSCROLL, SB_BOTTOM, 0);
+            adjustCaretPos(&caret, gapbuffer, -1, 0, ti);
             break;
         case VK_PRIOR:
             SendMessage(hwnd, WM_VSCROLL, SB_PAGEUP, 0);
@@ -256,10 +307,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, 0);
             break;
         case VK_LEFT:
-            SendMessage(hwnd, WM_HSCROLL, SB_LINELEFT, 0);
+            adjustCaretPos(&caret, gapbuffer, -1, 0, ti);
             break;
         case VK_RIGHT:
-            SendMessage(hwnd, WM_HSCROLL, SB_LINERIGHT, 0);
+            adjustCaretPos(&caret, gapbuffer, 1, 0, ti);
             break;
         }
         break;
@@ -268,66 +319,118 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_CHAR:
     {
         hdc = GetDC(hwnd);
+
         SelectObject(hdc, GetStockObject(SYSTEM_FIXED_FONT));
         SetBkMode(hdc, TRANSPARENT);
+
         switch (wParam) {
             case '\r':
                 break;
             case '\t':
                 break;
             case '\b':
-                deleteChar(hwnd, hdc, &doc_row, &doc_col, cxClient, cxChar, cyChar);
+                deleteChar(hwnd, hdc, &caret, gapbuffer, ti);
                 break;
             default:
-                printChar(hdc, wParam, &doc_row, &doc_col, cxClient, cxChar, cyChar);
+                printChar(hdc, wParam, &caret, gapbuffer, ti);
                 break;
         }
+
+        printDoc(hdc, gapbuffer, ti);
+
         ReleaseDC(hwnd, hdc);
+
+        SetCaretPos(caret.col, caret.row);
 
         break;
     }
 
-    case WM_CLOSE:
+    case WM_SETFOCUS:
+    {
+        CreateCaret(hwnd, NULL, cxChar, cyChar);
+        ShowCaret(hwnd);
+
+        SetCaretPos(caret.col, caret.row);
+        break;
+    }
+
+    case WM_KILLFOCUS:
+    {
+        HideCaret(hwnd);
+        DestroyCaret();
+        break;
+    }
+
+    case WM_CLOSE: {
         DestroyWindow(hwnd);
         break;
+    }
 
-    case WM_DESTROY:
+    case WM_DESTROY: {
         PostQuitMessage(0);
         break;
+    }
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
     return 0;
 }
 
-void printChar(HDC hdc, TCHAR ch, int* line, int* col, int maxWidth, int charWidth, int charHeight) {
+void printChar(HDC hdc, TCHAR ch, Caret* caret, GapBuffer, TextInfo ti) {
 
-    TCHAR szBuffer[10];
-    TextOut(hdc, *col, *line, szBuffer, wsprintf(szBuffer, TEXT("%c"), ch));
+}
 
-    (*col)+=charWidth;
-    if (*col > maxWidth-charWidth) {
-        (*line)+=charHeight;
-        *col = 0;
+void deleteChar(HWND hwnd, HDC hdc, Caret* caret, GapBuffer gb, TextInfo ti) {
+
+}
+
+void adjustCaretPos(Caret* caret, GapBuffer gb, int x_change, int y_change, TextInfo ti) {
+
+    caret->col += x_change*ti.width;
+    if (caret->col > ti.maxLineWidth - ti.width) {
+        caret->col = 0;
+        caret->prev_col = 0;
+        caret->row += y_change*ti.height;
+    }
+    else if (caret->col < 0) {
+        caret->col = 0;
+    }
+    
+    SetCaretPos(caret->col, caret->row);
+}
+
+void printBuffer(HDC hdc, GapBuffer gb, TextInfo ti) {
+
+
+}
+
+void storeChar(CHAR ch, GapBuffer gb, int line_num, int caret_offset) {
+
+}
+
+int resizeBuffer(GapBuffer gapbuffer) {
+
+    char* temp = (char*)realloc(gapbuffer.txt_start, gapbuffer.size * 2);
+    if (temp == NULL) {
+        free(temp);
+        return 0;
+    }
+    gapbuffer.txt_start = temp;
+    gapbuffer.buffer = gapbuffer.txt_start + gapbuffer.size;
+    gapbuffer.buffer_end = gapbuffer.buffer + BUF_SIZE - 1;
+    return 1;
+}
+
+void shifBuffertLeft(GapBuffer gapbuf) {
+
+    for (int i = BUF_SIZE+gapbuf.buffer_pos; i > gapbuf.buffer_pos; i--) {
+        gapbuf.buffer[i] = gapbuf.buffer[i-1];
     }
 }
 
-void deleteChar(HWND hwnd, HDC hdc, int* line, int* col, int maxWidth, int charWidth, int charHeight) {
+void shiftBufferRight(GapBuffer gapbuf) {
 
-    RECT rect;
-
-    (*col)-=charWidth;
-
-    if (*col < 0) {
-        (*line) -= charHeight;
-        (*col) = maxWidth-charWidth;
+    for (int i = gapbuf.buffer_pos; i < BUF_SIZE + gapbuf.buffer_pos; i++) {
+        gapbuf.buffer[i] = gapbuf.buffer[i+1];
     }
-    if (*line < 0) {
-        *line = 0;
-        *col = 0;
-    }
-
-    SetRect(&rect, *col, *line, *col + charWidth, *line + charHeight);
-    InvalidateRect(hwnd, &rect, TRUE);
-
 }
