@@ -133,13 +133,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         // initializes empty gapbuffer
         gapbuffer.txt_start = (char*)calloc(BUF_SIZE, sizeof(char));
+        gapbuffer.txt_start[0] = 'x';
         gapbuffer.buffer_end = gapbuffer.txt_start+BUF_SIZE-1;
         gapbuffer.buffer = gapbuffer.txt_start;
         gapbuffer.size = BUF_SIZE;
 
-        ti.height = tm.tmHeight;
-        ti.width = tm.tmAveCharWidth;
-
+        ti.tm = tm;
 
         return 0;
     }
@@ -336,7 +335,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 break;
         }
 
-        printDoc(hdc, gapbuffer, ti);
+        printBuffer(hdc, gapbuffer, ti);
 
         ReleaseDC(hwnd, hdc);
 
@@ -376,8 +375,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
-void printChar(HDC hdc, TCHAR ch, Caret* caret, GapBuffer, TextInfo ti) {
-
+void printChar(HDC hdc, TCHAR ch, Caret* caret, GapBuffer gapbuffer, TextInfo ti) {
+    
 }
 
 void deleteChar(HWND hwnd, HDC hdc, Caret* caret, GapBuffer gb, TextInfo ti) {
@@ -386,22 +385,53 @@ void deleteChar(HWND hwnd, HDC hdc, Caret* caret, GapBuffer gb, TextInfo ti) {
 
 void adjustCaretPos(Caret* caret, GapBuffer gb, int x_change, int y_change, TextInfo ti) {
 
-    caret->col += x_change*ti.width;
-    if (caret->col > ti.maxLineWidth - ti.width) {
-        caret->col = 0;
-        caret->prev_col = 0;
-        caret->row += y_change*ti.height;
-    }
-    else if (caret->col < 0) {
-        caret->col = 0;
-    }
-    
-    SetCaretPos(caret->col, caret->row);
 }
 
-void printBuffer(HDC hdc, GapBuffer gb, TextInfo ti) {
+void printBuffer(HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
 
+    TCHAR* szBuffer;
+    int x = 0, y = 0;
+    
+    int max_char = ti.maxLineWidth / ti.tm.tmAveCharWidth;
+    // prints each character before buffer
+    for (int i = 0; i < gapbuffer.buffer_pos; i++) {
+        szBuffer = (TCHAR*)calloc(5, sizeof(TCHAR));
 
+        if (!szBuffer) {
+            free(szBuffer);
+            continue;
+        }
+
+        TextOut(hdc, x, y, szBuffer, wsprintf(szBuffer, TEXT("%c"), gapbuffer.txt_start[i]));
+
+        x += ti.tm.tmHeight;
+        if (*szBuffer == '\n') {
+            y += ti.tm.tmHeight;
+            x = 0;
+        }
+        
+        free(szBuffer);
+    }
+    // prints buffer
+    for (int i = 0; i < BUF_SIZE; i++) {
+        szBuffer = (TCHAR*)calloc(5, sizeof(TCHAR));
+
+        if (!szBuffer) {
+            free(szBuffer);
+            continue;
+        }
+
+        if (gapbuffer.buffer[i] == '\0')
+            break;
+        TextOut(hdc, x, y, szBuffer, wsprintf(szBuffer, TEXT("%c"), gapbuffer.buffer[i]));
+
+        x += ti.tm.tmAveCharWidth;
+        if (*szBuffer == '\n') {
+            y += ti.tm.tmHeight;
+            x = 0;
+        }
+        free(szBuffer);
+    }
 }
 
 void storeChar(CHAR ch, GapBuffer gb, int line_num, int caret_offset) {
@@ -411,7 +441,7 @@ void storeChar(CHAR ch, GapBuffer gb, int line_num, int caret_offset) {
 int resizeBuffer(GapBuffer gapbuffer) {
 
     char* temp = (char*)realloc(gapbuffer.txt_start, gapbuffer.size * 2);
-    if (temp == NULL) {
+    if (!temp) {
         free(temp);
         return 0;
     }
@@ -421,16 +451,16 @@ int resizeBuffer(GapBuffer gapbuffer) {
     return 1;
 }
 
-void shifBuffertLeft(GapBuffer gapbuf) {
+void shifBuffertLeft(GapBuffer gapbuffer) {
 
-    for (int i = BUF_SIZE+gapbuf.buffer_pos; i > gapbuf.buffer_pos; i--) {
-        gapbuf.buffer[i] = gapbuf.buffer[i-1];
+    for (int i = BUF_SIZE+gapbuffer.buffer_pos; i > gapbuffer.buffer_pos; i--) {
+        gapbuffer.buffer[i] = gapbuffer.buffer[i-1];
     }
 }
 
-void shiftBufferRight(GapBuffer gapbuf) {
+void shiftBufferRight(GapBuffer gapbuffer) {
 
-    for (int i = gapbuf.buffer_pos; i < BUF_SIZE + gapbuf.buffer_pos; i++) {
-        gapbuf.buffer[i] = gapbuf.buffer[i+1];
+    for (int i = gapbuffer.buffer_pos; i < BUF_SIZE + gapbuffer.buffer_pos; i++) {
+        gapbuffer.buffer[i] = gapbuffer.buffer[i+1];
     }
 }
