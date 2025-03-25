@@ -5,7 +5,7 @@
 #include "DEVCAPS.h"
 
 #define LINE_COUNT 20
-#define BUF_SIZE 50
+#define BUF_SIZE 20
 
 
 // Info on caret position
@@ -22,17 +22,22 @@ typedef struct textInfo {
 } TextInfo;
 
 typedef struct gapBuffer {
-    char* txt_start;
-    char* buffer;
-    char* buffer_end;
+    // start of struct
+    TCHAR* txt_start;
+    // start of empty buffer
+    TCHAR* buffer;
+    // end of empty buffer
+    TCHAR* buffer_end;
+    // size of entire struct
     int size;
-    int buffer_pos;
+    // index of empty buffer in struct
+    int buffer_index;
 } GapBuffer, *GapBufferPtr;
 
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
-void printChar(HDC, TCHAR, Caret*, GapBuffer, TextInfo);
-void deleteChar(HWND, HDC, Caret*, GapBuffer, TextInfo);
+void addBufferChar(TCHAR, GapBuffer*);
+void deleteChar(GapBuffer);
 void adjustCaretPos(Caret*, GapBuffer, int x_change, int y_change, TextInfo);
 void printBuffer(HDC, GapBuffer, TextInfo);
 int resizeBuffer(GapBuffer);
@@ -109,8 +114,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     HBRUSH greyHBrush = CreateSolidBrush(RGB(169, 169, 169));
 
-    TCHAR szBuffer[10];
-
     si.cbSize = sizeof(SCROLLINFO);
 
     switch (msg) {
@@ -132,11 +135,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         caret.col = 0;
 
         // initializes empty gapbuffer
-        gapbuffer.txt_start = (char*)calloc(BUF_SIZE, sizeof(char));
-        gapbuffer.txt_start[0] = 'x';
-        gapbuffer.buffer_end = gapbuffer.txt_start+BUF_SIZE-1;
-        gapbuffer.buffer = gapbuffer.txt_start;
+        gapbuffer.txt_start = (TCHAR*)calloc(BUF_SIZE, sizeof(TCHAR));
         gapbuffer.size = BUF_SIZE;
+        gapbuffer.buffer = gapbuffer.txt_start;
+        gapbuffer.buffer_index = 0;
+        gapbuffer.buffer_end = gapbuffer.txt_start + BUF_SIZE - 1;
+
 
         ti.tm = tm;
 
@@ -328,18 +332,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             case '\t':
                 break;
             case '\b':
-                deleteChar(hwnd, hdc, &caret, gapbuffer, ti);
                 break;
             default:
-                printChar(hdc, wParam, &caret, gapbuffer, ti);
+                addBufferChar(wParam, &gapbuffer);
                 break;
         }
 
         printBuffer(hdc, gapbuffer, ti);
 
         ReleaseDC(hwnd, hdc);
-
-        SetCaretPos(caret.col, caret.row);
 
         break;
     }
@@ -375,11 +376,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
-void printChar(HDC hdc, TCHAR ch, Caret* caret, GapBuffer gapbuffer, TextInfo ti) {
+void addBufferChar(TCHAR ch, GapBuffer* gapbuffer) {
     
+    if (gapbuffer->buffer >= gapbuffer->buffer_end-1)
+        resizeBuffer(*gapbuffer);
+
+    gapbuffer->buffer[0] = ch;
+    gapbuffer->buffer++;
+
+    gapbuffer->buffer_index++;
 }
 
-void deleteChar(HWND hwnd, HDC hdc, Caret* caret, GapBuffer gb, TextInfo ti) {
+void deleteChar(GapBuffer gb) {
+
 
 }
 
@@ -387,24 +396,30 @@ void adjustCaretPos(Caret* caret, GapBuffer gb, int x_change, int y_change, Text
 
 }
 
+// first prints content before buffer, then in buffer, then after buffer in separate loops
 void printBuffer(HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
 
     TCHAR* szBuffer;
     int x = 0, y = 0;
     
     int max_char = ti.maxLineWidth / ti.tm.tmAveCharWidth;
-    // prints each character before buffer
-    for (int i = 0; i < gapbuffer.buffer_pos; i++) {
-        szBuffer = (TCHAR*)calloc(5, sizeof(TCHAR));
+    // prints each character in buffer
+    for (int i = 0; i < gapbuffer.size; i++) {
+        szBuffer = (TCHAR*)calloc(2, sizeof(TCHAR));
 
         if (!szBuffer) {
             free(szBuffer);
             continue;
         }
+        // skip empty buffer
+        if (i == gapbuffer.buffer_index) {
+            i += gapbuffer.buffer_end - gapbuffer.buffer-1;
+            continue;
+        }
 
         TextOut(hdc, x, y, szBuffer, wsprintf(szBuffer, TEXT("%c"), gapbuffer.txt_start[i]));
 
-        x += ti.tm.tmHeight;
+        x += ti.tm.tmAveCharWidth;
         if (*szBuffer == '\n') {
             y += ti.tm.tmHeight;
             x = 0;
@@ -412,7 +427,7 @@ void printBuffer(HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
         
         free(szBuffer);
     }
-    // prints buffer
+    // prints after buffer
     for (int i = 0; i < BUF_SIZE; i++) {
         szBuffer = (TCHAR*)calloc(5, sizeof(TCHAR));
 
@@ -423,6 +438,7 @@ void printBuffer(HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
 
         if (gapbuffer.buffer[i] == '\0')
             break;
+
         TextOut(hdc, x, y, szBuffer, wsprintf(szBuffer, TEXT("%c"), gapbuffer.buffer[i]));
 
         x += ti.tm.tmAveCharWidth;
@@ -434,33 +450,33 @@ void printBuffer(HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
     }
 }
 
-void storeChar(CHAR ch, GapBuffer gb, int line_num, int caret_offset) {
-
-}
-
+// doubles buffer size and readjusts buffer pointers
 int resizeBuffer(GapBuffer gapbuffer) {
 
-    char* temp = (char*)realloc(gapbuffer.txt_start, gapbuffer.size * 2);
+    TCHAR* temp = (TCHAR*)realloc(gapbuffer.txt_start, gapbuffer.size * 2);
     if (!temp) {
         free(temp);
         return 0;
     }
+
     gapbuffer.txt_start = temp;
     gapbuffer.buffer = gapbuffer.txt_start + gapbuffer.size;
-    gapbuffer.buffer_end = gapbuffer.buffer + BUF_SIZE - 1;
+    gapbuffer.buffer_index = gapbuffer.size;
+    gapbuffer.buffer_end = gapbuffer.buffer + gapbuffer.size - 1;
+    gapbuffer.size *= 2;
     return 1;
 }
 
 void shifBuffertLeft(GapBuffer gapbuffer) {
 
-    for (int i = BUF_SIZE+gapbuffer.buffer_pos; i > gapbuffer.buffer_pos; i--) {
+    for (int i = BUF_SIZE+gapbuffer.buffer_index; i > gapbuffer.buffer_index; i--) {
         gapbuffer.buffer[i] = gapbuffer.buffer[i-1];
     }
 }
 
 void shiftBufferRight(GapBuffer gapbuffer) {
 
-    for (int i = gapbuffer.buffer_pos; i < BUF_SIZE + gapbuffer.buffer_pos; i++) {
+    for (int i = gapbuffer.buffer_index; i < BUF_SIZE + gapbuffer.buffer_index; i++) {
         gapbuffer.buffer[i] = gapbuffer.buffer[i+1];
     }
 }
