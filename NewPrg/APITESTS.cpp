@@ -4,8 +4,8 @@
 
 #include "DEVCAPS.h"
 
-#define LINE_COUNT 20
-#define BUF_SIZE 20
+
+#define BUF_SIZE 10
 
 
 // Info on caret position
@@ -40,7 +40,7 @@ void addBufferChar(TCHAR, GapBuffer*);
 void deleteChar(GapBuffer);
 void adjustCaretPos(Caret*, GapBuffer, int x_change, int y_change, TextInfo);
 void printBuffer(HDC, GapBuffer, TextInfo);
-int resizeBuffer(GapBuffer);
+int resizeBuffer(GapBuffer*);
 
 const TCHAR g_szClassName[] = TEXT("APITESTS");
 
@@ -135,7 +135,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         caret.col = 0;
 
         // initializes empty gapbuffer
-        gapbuffer.txt_start = (TCHAR*)calloc(BUF_SIZE, sizeof(TCHAR));
+        gapbuffer.txt_start = (TCHAR*)malloc(BUF_SIZE*sizeof(TCHAR));
         gapbuffer.size = BUF_SIZE;
         gapbuffer.buffer = gapbuffer.txt_start;
         gapbuffer.buffer_index = 0;
@@ -378,8 +378,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 void addBufferChar(TCHAR ch, GapBuffer* gapbuffer) {
     
-    if (gapbuffer->buffer >= gapbuffer->buffer_end-1)
-        resizeBuffer(*gapbuffer);
+    if (gapbuffer->buffer > gapbuffer->buffer_end)
+        resizeBuffer(gapbuffer);
 
     gapbuffer->buffer[0] = ch;
     gapbuffer->buffer++;
@@ -413,57 +413,37 @@ void printBuffer(HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
         }
         // skip empty buffer
         if (i == gapbuffer.buffer_index) {
-            i += gapbuffer.buffer_end - gapbuffer.buffer-1;
+            i += gapbuffer.buffer_end - gapbuffer.buffer+1;
             continue;
         }
 
         TextOut(hdc, x, y, szBuffer, wsprintf(szBuffer, TEXT("%c"), gapbuffer.txt_start[i]));
 
         x += ti.tm.tmAveCharWidth;
-        if (*szBuffer == '\n') {
+        if (*szBuffer == '\n' || x >= ti.maxLineWidth) {
             y += ti.tm.tmHeight;
             x = 0;
         }
         
         free(szBuffer);
     }
-    // prints after buffer
-    for (int i = 0; i < BUF_SIZE; i++) {
-        szBuffer = (TCHAR*)calloc(5, sizeof(TCHAR));
 
-        if (!szBuffer) {
-            free(szBuffer);
-            continue;
-        }
-
-        if (gapbuffer.buffer[i] == '\0')
-            break;
-
-        TextOut(hdc, x, y, szBuffer, wsprintf(szBuffer, TEXT("%c"), gapbuffer.buffer[i]));
-
-        x += ti.tm.tmAveCharWidth;
-        if (*szBuffer == '\n') {
-            y += ti.tm.tmHeight;
-            x = 0;
-        }
-        free(szBuffer);
-    }
 }
 
 // doubles buffer size and readjusts buffer pointers
-int resizeBuffer(GapBuffer gapbuffer) {
+int resizeBuffer(GapBuffer* gapbuffer) {
 
-    TCHAR* temp = (TCHAR*)realloc(gapbuffer.txt_start, gapbuffer.size * 2);
+    TCHAR* temp = (TCHAR*)realloc(gapbuffer->txt_start, sizeof(TCHAR) * (gapbuffer->size + BUF_SIZE));
     if (!temp) {
         free(temp);
         return 0;
     }
 
-    gapbuffer.txt_start = temp;
-    gapbuffer.buffer = gapbuffer.txt_start + gapbuffer.size;
-    gapbuffer.buffer_index = gapbuffer.size;
-    gapbuffer.buffer_end = gapbuffer.buffer + gapbuffer.size - 1;
-    gapbuffer.size *= 2;
+    gapbuffer->txt_start = temp;
+    gapbuffer->buffer = gapbuffer->txt_start + gapbuffer->size;
+    gapbuffer->buffer_index = gapbuffer->size;
+    gapbuffer->buffer_end = gapbuffer->buffer + BUF_SIZE;
+    gapbuffer->size += BUF_SIZE;
     return 1;
 }
 
