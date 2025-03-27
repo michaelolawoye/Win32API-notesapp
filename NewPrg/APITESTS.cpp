@@ -37,9 +37,9 @@ typedef struct gapBuffer {
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 void addBufferChar(TCHAR, GapBuffer*);
-void deleteChar(GapBuffer);
+void deleteChar(GapBuffer*);
 void adjustCaretPos(Caret*, GapBuffer, int x_change, int y_change, TextInfo);
-void printBuffer(HDC, GapBuffer, TextInfo);
+void printBuffer(HWND, HDC, GapBuffer, TextInfo);
 int resizeBuffer(GapBuffer*);
 
 const TCHAR g_szClassName[] = TEXT("APITESTS");
@@ -332,13 +332,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             case '\t':
                 break;
             case '\b':
+                deleteChar(&gapbuffer);
                 break;
             default:
                 addBufferChar(wParam, &gapbuffer);
                 break;
         }
 
-        printBuffer(hdc, gapbuffer, ti);
+        printBuffer(hwnd, hdc, gapbuffer, ti);
 
         ReleaseDC(hwnd, hdc);
 
@@ -387,7 +388,14 @@ void addBufferChar(TCHAR ch, GapBuffer* gapbuffer) {
     gapbuffer->buffer_index++;
 }
 
-void deleteChar(GapBuffer gb) {
+void deleteBufferChar(GapBuffer* gapbuffer) {
+
+    if (gapbuffer->buffer == gapbuffer->txt_start)
+        return;
+    gapbuffer->buffer = gapbuffer->txt_start + gapbuffer->buffer_index-1;
+    gapbuffer->buffer_index--;
+    
+    // remove character from screen
 
 
 }
@@ -397,7 +405,7 @@ void adjustCaretPos(Caret* caret, GapBuffer gb, int x_change, int y_change, Text
 }
 
 // first prints content before buffer, then in buffer, then after buffer in separate loops
-void printBuffer(HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
+void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
 
     TCHAR* szBuffer;
     int x = 0, y = 0;
@@ -416,7 +424,6 @@ void printBuffer(HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
             i += gapbuffer.buffer_end - gapbuffer.buffer+1;
             continue;
         }
-
         TextOut(hdc, x, y, szBuffer, wsprintf(szBuffer, TEXT("%c"), gapbuffer.txt_start[i]));
 
         x += ti.tm.tmAveCharWidth;
