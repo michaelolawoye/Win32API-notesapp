@@ -37,7 +37,7 @@ typedef struct gapBuffer {
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 void addBufferChar(TCHAR, GapBuffer*);
-void deleteChar(GapBuffer*);
+void deleteBufferChar(GapBuffer*);
 void adjustCaretPos(Caret*, GapBuffer, int x_change, int y_change, TextInfo);
 void printBuffer(HWND, HDC, GapBuffer, TextInfo);
 int resizeBuffer(GapBuffer*);
@@ -136,6 +136,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         // initializes empty gapbuffer
         gapbuffer.txt_start = (TCHAR*)malloc(BUF_SIZE*sizeof(TCHAR));
+        if (!gapbuffer.txt_start) {
+            free(gapbuffer.txt_start);
+            perror("Gap buffer initial allocation failed");
+            return -1;
+        }
         gapbuffer.size = BUF_SIZE;
         gapbuffer.buffer = gapbuffer.txt_start;
         gapbuffer.buffer_index = 0;
@@ -143,6 +148,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 
         ti.tm = tm;
+        ti.tm.tmAveCharWidth += 1;
 
         return 0;
     }
@@ -332,7 +338,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             case '\t':
                 break;
             case '\b':
-                deleteChar(&gapbuffer);
+                deleteBufferChar(&gapbuffer);
                 break;
             default:
                 addBufferChar(wParam, &gapbuffer);
@@ -396,7 +402,7 @@ void deleteBufferChar(GapBuffer* gapbuffer) {
     gapbuffer->buffer_index--;
     
     // remove character from screen
-
+    gapbuffer->buffer[0] = '\0';
 
 }
 
@@ -408,6 +414,7 @@ void adjustCaretPos(Caret* caret, GapBuffer gb, int x_change, int y_change, Text
 void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
 
     TCHAR* szBuffer;
+    RECT rect;
     int x = 0, y = 0;
     
     int max_char = ti.maxLineWidth / ti.tm.tmAveCharWidth;
@@ -417,10 +424,16 @@ void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
 
         if (!szBuffer) {
             free(szBuffer);
+            perror("Character buffer memory allocation failed");
             continue;
         }
-        // skip empty buffer
+        // skip empty buffer after 1st character is checked
         if (i == gapbuffer.buffer_index) {
+            if (gapbuffer.txt_start[i] == '\0') {
+                SetRect(&rect, x, y, x + ti.tm.tmAveCharWidth, y + ti.tm.tmHeight);
+                InvalidateRect(hwnd, &rect, TRUE);
+                
+            }
             i += gapbuffer.buffer_end - gapbuffer.buffer+1;
             continue;
         }
@@ -442,6 +455,7 @@ int resizeBuffer(GapBuffer* gapbuffer) {
 
     TCHAR* temp = (TCHAR*)realloc(gapbuffer->txt_start, sizeof(TCHAR) * (gapbuffer->size + BUF_SIZE));
     if (!temp) {
+        perror("Resizing reallocation failed");
         free(temp);
         return 0;
     }
