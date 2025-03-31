@@ -333,8 +333,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         SetBkMode(hdc, TRANSPARENT);
 
         switch (wParam) {
-            case '\r':
-                break;
             case '\t':
                 break;
             case '\b':
@@ -432,7 +430,7 @@ void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
             if (gapbuffer.txt_start[i] == '\0') {
                 SetRect(&rect, x, y, x + ti.tm.tmAveCharWidth, y + ti.tm.tmHeight);
                 InvalidateRect(hwnd, &rect, TRUE);
-                
+
             }
             i += gapbuffer.buffer_end - gapbuffer.buffer+1;
             continue;
@@ -440,7 +438,7 @@ void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
         TextOut(hdc, x, y, szBuffer, wsprintf(szBuffer, TEXT("%c"), gapbuffer.txt_start[i]));
 
         x += ti.tm.tmAveCharWidth;
-        if (*szBuffer == '\n' || x >= ti.maxLineWidth) {
+        if (szBuffer[0] == '\r' || x >= ti.maxLineWidth) {
             y += ti.tm.tmHeight;
             x = 0;
         }
