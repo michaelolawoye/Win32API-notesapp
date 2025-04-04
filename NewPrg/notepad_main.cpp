@@ -48,7 +48,7 @@ int savetoFile(GapBuffer, char* filename);
 int readfromFile(GapBuffer*, char* filename);
 void clearBuffer(GapBuffer*);
 
-const TCHAR g_szClassName[] = TEXT("APITESTS");
+const TCHAR g_szClassName[] = TEXT("NotePad_App");
 
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow) {
