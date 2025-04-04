@@ -1,3 +1,4 @@
+#pragma warning(disable:4996)
 #include <windows.h>
 #include <stdio.h>
 #include <math.h>
@@ -22,11 +23,11 @@ typedef struct textInfo {
 } TextInfo;
 
 typedef struct gapBuffer {
-    // start of struct
+    // pointer to start of entire gapbuffer
     TCHAR* txt_start;
-    // start of empty buffer
+    // pointer to first character of empty buffer
     TCHAR* buffer;
-    // end of empty buffer
+    // pointer to character right after end of empty buffer
     TCHAR* buffer_end;
     // size of entire struct
     int size;
@@ -41,6 +42,11 @@ void deleteBufferChar(GapBuffer*);
 void adjustCaretPos(Caret*, GapBuffer, int x_change, int y_change, TextInfo);
 void printBuffer(HWND, HDC, GapBuffer, TextInfo);
 int resizeBuffer(GapBuffer*);
+void shiftBufferLeft(GapBuffer*);
+void shiftBufferRight(GapBuffer*);
+int savetoFile(GapBuffer, char* filename);
+int readfromFile(GapBuffer*, char* filename);
+void clearBuffer(GapBuffer*);
 
 const TCHAR g_szClassName[] = TEXT("APITESTS");
 
@@ -101,10 +107,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     HDC hdc;
     PAINTSTRUCT ps;
-    RECT rect;
     TEXTMETRIC tm;
     SCROLLINFO si;
-    POINT pt;
     static int cxChar, cyChar, cxCaps;
     static int cxClient, cyClient, maxWidth;
     static int vScrollPos, hScrollPos;;
@@ -333,13 +337,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         SetBkMode(hdc, TRANSPARENT);
 
         switch (wParam) {
-            case '\t':
-                break;
             case '\b':
                 deleteBufferChar(&gapbuffer);
                 break;
+            // TEMPORARY BLOCK
+            case '\t':
+                shiftBufferLeft(&gapbuffer);
+                break;
+            case '1':
+                savetoFile(gapbuffer, (char*)"notes.txt");
+                break;
+            case '2':
+                readfromFile(&gapbuffer, (char*)"notes.txt");
+                break;
+            // END OF TEMPORARY BLOCK
             default:
-                addBufferChar(wParam, &gapbuffer);
+                addBufferChar((TCHAR)wParam, &gapbuffer);
                 break;
         }
 
@@ -404,17 +417,22 @@ void deleteBufferChar(GapBuffer* gapbuffer) {
 
 }
 
+// TODO
 void adjustCaretPos(Caret* caret, GapBuffer gb, int x_change, int y_change, TextInfo ti) {
 
 }
 
-// first prints content before buffer, then in buffer, then after buffer in separate loops
+// prints contents of gapbuffer, skipping empty buffer
 void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
 
     TCHAR* szBuffer;
     RECT rect;
     int x = 0, y = 0;
-    
+
+    // clears screen immediately, before printing characters
+    InvalidateRect(hwnd, NULL, TRUE);
+    UpdateWindow(hwnd);
+
     int max_char = ti.maxLineWidth / ti.tm.tmAveCharWidth;
     // prints each character in buffer
     for (int i = 0; i < gapbuffer.size; i++) {
@@ -430,14 +448,16 @@ void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
             if (gapbuffer.txt_start[i] == '\0') {
                 SetRect(&rect, x, y, x + ti.tm.tmAveCharWidth, y + ti.tm.tmHeight);
                 InvalidateRect(hwnd, &rect, TRUE);
-
             }
-            i += gapbuffer.buffer_end - gapbuffer.buffer+1;
+
+            i = (int)(gapbuffer.buffer_end - gapbuffer.txt_start);
             continue;
         }
+
         TextOut(hdc, x, y, szBuffer, wsprintf(szBuffer, TEXT("%c"), gapbuffer.txt_start[i]));
 
         x += ti.tm.tmAveCharWidth;
+
         if (szBuffer[0] == '\r' || x >= ti.maxLineWidth) {
             y += ti.tm.tmHeight;
             x = 0;
@@ -448,7 +468,7 @@ void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
 
 }
 
-// doubles buffer size and readjusts buffer pointers
+// adds BUF_SIZE to buffer size and readjusts buffer pointers
 int resizeBuffer(GapBuffer* gapbuffer) {
 
     TCHAR* temp = (TCHAR*)realloc(gapbuffer->txt_start, sizeof(TCHAR) * (gapbuffer->size + BUF_SIZE));
@@ -457,25 +477,122 @@ int resizeBuffer(GapBuffer* gapbuffer) {
         free(temp);
         return 0;
     }
+    int prev_index = gapbuffer->buffer_index;
+    int prev_size = gapbuffer->size;
 
     gapbuffer->txt_start = temp;
     gapbuffer->buffer = gapbuffer->txt_start + gapbuffer->size;
     gapbuffer->buffer_index = gapbuffer->size;
     gapbuffer->buffer_end = gapbuffer->buffer + BUF_SIZE;
     gapbuffer->size += BUF_SIZE;
+
     return 1;
 }
 
-void shifBuffertLeft(GapBuffer gapbuffer) {
+// shifts empty buffer to the left one character
+// FIXME
+void shiftBufferLeft(GapBuffer *gapbuffer) {
 
-    for (int i = BUF_SIZE+gapbuffer.buffer_index; i > gapbuffer.buffer_index; i--) {
-        gapbuffer.buffer[i] = gapbuffer.buffer[i-1];
+    if (gapbuffer->buffer_index == 0) {
+        return;
+    }
+
+    if (gapbuffer->buffer_end-gapbuffer->buffer < 1) {
+        resizeBuffer(gapbuffer);
+    }
+
+    int index = gapbuffer->buffer_index;
+    int after_buffer = (int)(gapbuffer->buffer_end - gapbuffer->txt_start);
+
+    gapbuffer->txt_start[after_buffer] = gapbuffer->txt_start[index-1];
+    gapbuffer->buffer--;
+    gapbuffer->buffer_index--;
+    gapbuffer->buffer_end--;
+    gapbuffer->buffer[0] = '\0';
+}
+
+// shifts empty buffer to the right one character
+// TODO
+void shiftBufferRight(GapBuffer *gapbuffer) {
+
+    for (int i = gapbuffer->buffer_index; i < BUF_SIZE + gapbuffer->buffer_index; i++) {
+        gapbuffer->buffer[i] = gapbuffer->buffer[i+1];
     }
 }
 
-void shiftBufferRight(GapBuffer gapbuffer) {
+// saves current gapbuffer contents to file (creating one if filename doesn't exist)
+int savetoFile(GapBuffer gapbuffer, char* filename) {
 
-    for (int i = gapbuffer.buffer_index; i < BUF_SIZE + gapbuffer.buffer_index; i++) {
-        gapbuffer.buffer[i] = gapbuffer.buffer[i+1];
+    FILE *fp = NULL;
+
+    if ((fp = fopen(filename, "w")) == NULL) {
+        return 1;
     }
+
+    for (int i = 0; i < gapbuffer.size; i++) {
+        if (i == gapbuffer.buffer_index) {
+            i += BUF_SIZE-1;
+            continue;
+        }
+        fputc(gapbuffer.txt_start[i], fp);
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+// Clears gapbuffer and loads contents from file into it
+int readfromFile(GapBuffer* gapbuffer, char* filename) {
+
+    FILE* fp = NULL;
+
+    if ((fp = fopen(filename, "r")) == NULL) {
+        return 1;
+    }
+
+    clearBuffer(gapbuffer);
+
+    char curr_char = fgetc(fp);
+    int index = 0;
+
+    while (curr_char != EOF) {
+
+        // if index is larger than the size of the current gapbuffer, expand the buffer
+        if (index >= gapbuffer->size-1) {
+            resizeBuffer(gapbuffer);
+            continue;
+        }
+
+        gapbuffer->txt_start[index++] = curr_char;
+        curr_char = fgetc(fp);
+    }
+
+    gapbuffer->buffer = gapbuffer->txt_start + index;
+    gapbuffer->buffer_end = gapbuffer->txt_start + gapbuffer->size;
+    gapbuffer->buffer_index = index;
+
+    fclose(fp);
+    return 0;
+}
+
+// clears buffer, resets size and pointers
+void clearBuffer(GapBuffer* gapbuffer) {
+
+    for (int i = 0; i < gapbuffer->size; i++) {
+        gapbuffer->txt_start[i] = '\0';
+    }
+    TCHAR* temp = (TCHAR*)realloc(gapbuffer->txt_start, sizeof(TCHAR) * (BUF_SIZE + 1));
+
+    if (!temp) {
+        return;
+    }
+
+    gapbuffer->txt_start = temp;
+    gapbuffer->buffer = gapbuffer->txt_start;
+    gapbuffer->buffer_end = gapbuffer->buffer + BUF_SIZE;
+    gapbuffer->buffer_index = 0;
+    gapbuffer->size = BUF_SIZE+1;
+
+    
+
 }
