@@ -133,7 +133,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="APITESTS.cpp" />
+    <ClCompile Include="notepad_main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DEVCAPS.h" />

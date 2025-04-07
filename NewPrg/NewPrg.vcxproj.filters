@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="APITESTS.cpp">
+    <ClCompile Include="notepad_main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
