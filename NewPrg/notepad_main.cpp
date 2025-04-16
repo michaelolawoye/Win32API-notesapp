@@ -6,7 +6,7 @@
 #include "DEVCAPS.h"
 
 
-#define BUF_SIZE 10
+#define BUF_SIZE 5
 
 
 // Info on caret position
@@ -148,8 +148,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         gapbuffer.size = BUF_SIZE;
         gapbuffer.buffer = gapbuffer.txt_start;
         gapbuffer.buffer_index = 0;
-        gapbuffer.after_buffer = gapbuffer.txt_start + BUF_SIZE - 1;
-
+        gapbuffer.after_buffer = gapbuffer.buffer + BUF_SIZE;
+        
 
         ti.tm = tm;
         ti.tm.tmAveCharWidth += 1;
@@ -320,10 +320,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, 0);
             break;
         case VK_LEFT:
-            adjustCaretPos(&caret, gapbuffer, -1, 0, ti);
+            shiftBufferLeft(&gapbuffer);
             break;
         case VK_RIGHT:
-            adjustCaretPos(&caret, gapbuffer, 1, 0, ti);
+            shiftBufferRight(&gapbuffer);
             break;
         }
         break;
@@ -341,9 +341,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 deleteBufferChar(&gapbuffer);
                 break;
             // TEMPORARY BLOCK
-            case '\t':
-                shiftBufferLeft(&gapbuffer);
-                break;
             case '1':
                 savetoFile(gapbuffer, (char*)"notes.txt");
                 break;
@@ -396,13 +393,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 void addBufferChar(TCHAR ch, GapBuffer* gapbuffer) {
     
-    if (gapbuffer->buffer > gapbuffer->after_buffer)
+    if (gapbuffer->buffer >= gapbuffer->after_buffer) {
+        
         resizeBuffer(gapbuffer);
-
+    }
+    
     gapbuffer->buffer[0] = ch;
     gapbuffer->buffer++;
-
     gapbuffer->buffer_index++;
+    
 }
 
 void deleteBufferChar(GapBuffer* gapbuffer) {
@@ -435,7 +434,7 @@ void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
 
     int max_char = ti.maxLineWidth / ti.tm.tmAveCharWidth;
     // prints each character in buffer
-    for (int i = 0; i < gapbuffer.size-1; i++) {
+    for (int i = 0; i < gapbuffer.size; i++) {
         szBuffer = (TCHAR*)calloc(2, sizeof(TCHAR));
 
         if (!szBuffer) {
@@ -450,7 +449,7 @@ void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
                 InvalidateRect(hwnd, &rect, TRUE);
             }
 
-            i = (int)(gapbuffer.after_buffer - gapbuffer.txt_start)-1;
+            i += (int)(gapbuffer.after_buffer - gapbuffer.buffer)-1;
             continue;
         }
 
@@ -477,22 +476,28 @@ int resizeBuffer(GapBuffer* gapbuffer) {
         free(temp);
         return 0;
     }
+    for (int i = gapbuffer->size; i < gapbuffer->size + BUF_SIZE; i++) {
+        temp[i] = 'x';
+    }
+
     int prev_index = gapbuffer->buffer_index;
     int prev_size = gapbuffer->size;
+    int buffer_end_index = (int)(gapbuffer->after_buffer - gapbuffer->txt_start);
 
-    // FIXME start
     gapbuffer->txt_start = temp;
-    gapbuffer->buffer = gapbuffer->txt_start + gapbuffer->size;
-    gapbuffer->buffer_index = gapbuffer->size;
+
+    gapbuffer->buffer = gapbuffer->txt_start + prev_index;
     gapbuffer->after_buffer = gapbuffer->buffer + BUF_SIZE;
     gapbuffer->size += BUF_SIZE;
 
-    int new_size = gapbuffer->size;
+    // if empty buffer was not at the end of the gapbuffer
+    if (prev_index < prev_size) {
 
-    for (int i = new_size - BUF_SIZE-1; i > prev_index; i--) {
-        gapbuffer->txt_start[i + BUF_SIZE] = gapbuffer->txt_start[i];
+        // 
+        for (int i = gapbuffer->size-1; i > prev_index+BUF_SIZE; i--) {
+            gapbuffer->txt_start[i] = gapbuffer->txt_start[i - BUF_SIZE];
+        }
     }
-    // FIXME end
 
     return 1;
 }
@@ -500,17 +505,21 @@ int resizeBuffer(GapBuffer* gapbuffer) {
 // shifts empty buffer to the left one character
 void shiftBufferLeft(GapBuffer *gapbuffer) {
 
+    // if buffer is at the start, can't shift left
     if (gapbuffer->buffer_index == 0) {
         return;
     }
 
+    // if buffer is empty, expand first
     if (gapbuffer->after_buffer-gapbuffer->buffer < 1) {
         resizeBuffer(gapbuffer);
     }
 
+    // save position of start of buffer and end of buffer
     int index = gapbuffer->buffer_index;
     int last_buffer = (int)(gapbuffer->after_buffer - gapbuffer->txt_start)-1;
 
+    // copies character before buffer to last buffer position and updates gapbuffer pointers
     gapbuffer->txt_start[last_buffer] = gapbuffer->txt_start[index-1];
     gapbuffer->buffer--;
     gapbuffer->buffer_index--;
@@ -518,12 +527,26 @@ void shiftBufferLeft(GapBuffer *gapbuffer) {
 }
 
 // shifts empty buffer to the right one character
-// TODO
 void shiftBufferRight(GapBuffer *gapbuffer) {
 
-    for (int i = gapbuffer->buffer_index; i < BUF_SIZE + gapbuffer->buffer_index; i++) {
-        gapbuffer->buffer[i] = gapbuffer->buffer[i+1];
+    if ((gapbuffer->after_buffer-gapbuffer->txt_start) >= gapbuffer->size) {
+        return;
     }
+
+    // if buffer is empty, expand first
+    if (gapbuffer->after_buffer - gapbuffer->buffer < 1) {
+        resizeBuffer(gapbuffer);
+    }
+
+    // save position of start of buffer and end of buffer
+    int index = gapbuffer->buffer_index;
+    int last_buffer = (int)(gapbuffer->after_buffer - gapbuffer->txt_start) - 1;
+
+    // copies characters after buffer to first buffer position and updates gapuffer pointers
+    gapbuffer->txt_start[index] = gapbuffer->txt_start[last_buffer + 1];
+    gapbuffer->buffer++;
+    gapbuffer->buffer_index++;
+    gapbuffer->after_buffer++;
 }
 
 // saves current gapbuffer contents to file (creating one if filename doesn't exist)
