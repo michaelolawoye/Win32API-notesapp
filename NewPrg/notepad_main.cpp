@@ -341,10 +341,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 deleteBufferChar(&gapbuffer);
                 break;
             // TEMPORARY BLOCK
-            case '1':
+            case '0':
                 savetoFile(gapbuffer, (char*)"notes.txt");
                 break;
-            case '2':
+            case '#':
                 readfromFile(&gapbuffer, (char*)"notes.txt");
                 break;
             // END OF TEMPORARY BLOCK
@@ -449,7 +449,7 @@ void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
                 InvalidateRect(hwnd, &rect, TRUE);
             }
 
-            i += (int)(gapbuffer.after_buffer - gapbuffer.buffer)-1;
+            i += max((int)(gapbuffer.after_buffer - gapbuffer.buffer)-1, 0);
             continue;
         }
 
@@ -476,9 +476,6 @@ int resizeBuffer(GapBuffer* gapbuffer) {
         free(temp);
         return 0;
     }
-    for (int i = gapbuffer->size; i < gapbuffer->size + BUF_SIZE; i++) {
-        temp[i] = 'x';
-    }
 
     int prev_index = gapbuffer->buffer_index;
     int prev_size = gapbuffer->size;
@@ -493,8 +490,8 @@ int resizeBuffer(GapBuffer* gapbuffer) {
     // if empty buffer was not at the end of the gapbuffer
     if (prev_index < prev_size) {
 
-        // 
-        for (int i = gapbuffer->size-1; i > prev_index+BUF_SIZE; i--) {
+        //// shift newly made buffer up to previous buffer index
+        for (int i = gapbuffer->size - 1; i > prev_index + BUF_SIZE; i--) {
             gapbuffer->txt_start[i] = gapbuffer->txt_start[i - BUF_SIZE];
         }
     }
@@ -529,6 +526,7 @@ void shiftBufferLeft(GapBuffer *gapbuffer) {
 // shifts empty buffer to the right one character
 void shiftBufferRight(GapBuffer *gapbuffer) {
 
+    // if buffer is at the end, can't shift right
     if ((gapbuffer->after_buffer-gapbuffer->txt_start) >= gapbuffer->size) {
         return;
     }
