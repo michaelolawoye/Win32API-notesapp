@@ -392,12 +392,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 void addBufferChar(TCHAR ch, GapBuffer* gapbuffer) {
-    
+
     if (gapbuffer->buffer >= gapbuffer->after_buffer) {
-        
+
         resizeBuffer(gapbuffer);
     }
-    
+
     gapbuffer->buffer[0] = ch;
     gapbuffer->buffer++;
     gapbuffer->buffer_index++;
@@ -443,14 +443,16 @@ void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
             continue;
         }
         // skip empty buffer after 1st character is checked
-        if (i == gapbuffer.buffer_index) {
+        if (i == gapbuffer.buffer_index && i != gapbuffer.after_buffer - gapbuffer.txt_start) {
             if (gapbuffer.txt_start[i] == '\0') {
                 SetRect(&rect, x, y, x + ti.tm.tmAveCharWidth, y + ti.tm.tmHeight);
                 InvalidateRect(hwnd, &rect, TRUE);
             }
 
-            i += max((int)(gapbuffer.after_buffer - gapbuffer.buffer)-1, 0);
+            // set i to after buffer position (minus one so next loop increments it to correct position)
+            i = (int)(gapbuffer.after_buffer - gapbuffer.txt_start) - 1;
             continue;
+            
         }
 
         TextOut(hdc, x, y, szBuffer, wsprintf(szBuffer, TEXT("%c"), gapbuffer.txt_start[i]));
@@ -512,12 +514,13 @@ void shiftBufferLeft(GapBuffer *gapbuffer) {
         resizeBuffer(gapbuffer);
     }
 
-    // save position of start of buffer and end of buffer
+    // save position of first and last position of empty buffer
     int index = gapbuffer->buffer_index;
     int last_buffer = (int)(gapbuffer->after_buffer - gapbuffer->txt_start)-1;
 
     // copies character before buffer to last buffer position and updates gapbuffer pointers
-    gapbuffer->txt_start[last_buffer] = gapbuffer->txt_start[index-1];
+    gapbuffer->txt_start[last_buffer] = gapbuffer->txt_start[index - 1];
+    gapbuffer->txt_start[index - 1] = 0xFD;
     gapbuffer->buffer--;
     gapbuffer->buffer_index--;
     gapbuffer->after_buffer--;
@@ -542,6 +545,7 @@ void shiftBufferRight(GapBuffer *gapbuffer) {
 
     // copies characters after buffer to first buffer position and updates gapuffer pointers
     gapbuffer->txt_start[index] = gapbuffer->txt_start[last_buffer + 1];
+    gapbuffer->txt_start[last_buffer + 1] = 0xFD;
     gapbuffer->buffer++;
     gapbuffer->buffer_index++;
     gapbuffer->after_buffer++;
