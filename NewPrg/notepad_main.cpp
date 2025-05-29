@@ -493,8 +493,9 @@ int resizeBuffer(GapBuffer* gapbuffer) {
     if (prev_index < prev_size) {
 
         //// shift newly made buffer up to previous buffer index
-        for (int i = gapbuffer->size - 1; i > prev_index + BUF_SIZE; i--) {
+        for (int i = gapbuffer->size - 1; i >= prev_index + BUF_SIZE; i--) {
             gapbuffer->txt_start[i] = gapbuffer->txt_start[i - BUF_SIZE];
+            gapbuffer->txt_start[i - BUF_SIZE] = 0xFD;
         }
     }
 
