@@ -2,11 +2,13 @@
 #include <windows.h>
 #include <stdio.h>
 #include <math.h>
+#include <limits.h>
 
 #include "DEVCAPS.h"
 
 
 #define BUF_SIZE 5
+#define DELETE_CHAR INT_MIN
 
 
 // Info on caret position
@@ -412,7 +414,7 @@ void deleteBufferChar(GapBuffer* gapbuffer) {
     gapbuffer->buffer_index--;
     
     // remove character from screen
-    gapbuffer->buffer[0] = '\0';
+    gapbuffer->buffer[0] = DELETE_CHAR;
 
 }
 
@@ -442,9 +444,10 @@ void printBuffer(HWND hwnd, HDC hdc, GapBuffer gapbuffer, TextInfo ti) {
             perror("Character buffer memory allocation failed");
             continue;
         }
-        // skip empty buffer after 1st character is checked
-        if (i == gapbuffer.buffer_index && i != gapbuffer.after_buffer - gapbuffer.txt_start) {
-            if (gapbuffer.txt_start[i] == '\0') {
+        // skip empty buffer after checking first buffer character
+        if (i == gapbuffer.buffer_index && i != gapbuffer.after_buffer - gapbuffer.txt_start) { // checks if empty buffer length is zero
+
+            if (gapbuffer.txt_start[i] == DELETE_CHAR) {
                 SetRect(&rect, x, y, x + ti.tm.tmAveCharWidth, y + ti.tm.tmHeight);
                 InvalidateRect(hwnd, &rect, TRUE);
             }
