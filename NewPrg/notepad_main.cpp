@@ -81,7 +81,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     hwnd = CreateWindowEx(
         WS_EX_CLIENTEDGE,
         g_szClassName,
-        TEXT("The title of my window"),
+        TEXT("Text editor"),
         WS_OVERLAPPEDWINDOW | WS_VSCROLL | WS_HSCROLL,
         CW_USEDEFAULT, CW_USEDEFAULT, 500, 360,
         NULL, NULL, hInstance, NULL);
