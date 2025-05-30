@@ -337,23 +337,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         SelectObject(hdc, GetStockObject(SYSTEM_FIXED_FONT));
         SetBkMode(hdc, TRANSPARENT);
+        HideCaret(hwnd);
+        for (int i = 0; i < (int)LOWORD(lParam); i++) {
 
-        switch (wParam) {
+            switch (wParam) {
             case '\b':
                 deleteBufferChar(&gapbuffer);
                 break;
-            // TEMPORARY BLOCK
+                // TEMPORARY BLOCK
             case '0':
                 savetoFile(gapbuffer, (char*)"notes.txt");
                 break;
             case '#':
                 readfromFile(&gapbuffer, (char*)"notes.txt");
                 break;
-            // END OF TEMPORARY BLOCK
+                // END OF TEMPORARY BLOCK
             default:
                 addBufferChar((TCHAR)wParam, &gapbuffer);
                 break;
+            }
         }
+        ShowCaret(hwnd);
 
         printBuffer(hwnd, hdc, gapbuffer, ti);
 
