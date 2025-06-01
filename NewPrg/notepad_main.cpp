@@ -39,13 +39,13 @@ typedef struct gapBuffer {
 
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
-void addBufferChar(TCHAR, GapBuffer*);
-void deleteBufferChar(GapBuffer*);
-void adjustCaretPos(Caret*, GapBuffer, int x_change, int y_change, TextInfo);
+void addBufferChar(TCHAR, GapBuffer*, Caret*, TextInfo);
+void deleteBufferChar(GapBuffer*, Caret*, TextInfo);
+void adjustCaretPos(int change, Caret*, GapBuffer, TextInfo);
 void printBuffer(HWND, HDC, GapBuffer, TextInfo);
 int resizeBuffer(GapBuffer*);
-void shiftBufferLeft(GapBuffer*);
-void shiftBufferRight(GapBuffer*);
+void shiftBufferLeft(GapBuffer*, Caret*, TextInfo);
+void shiftBufferRight(GapBuffer*, Caret*, TextInfo);
 int savetoFile(GapBuffer, char* filename);
 int readfromFile(GapBuffer*, char* filename);
 void clearBuffer(GapBuffer*);
@@ -304,10 +304,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         switch (wParam) {
         case VK_HOME:
-            adjustCaretPos(&caret, gapbuffer, -1, 0, ti);
+            adjustCaretPos(-1, &caret, gapbuffer, ti);
             break;
         case VK_END:
-            adjustCaretPos(&caret, gapbuffer, -1, 0, ti);
+            adjustCaretPos(1, &caret, gapbuffer, ti);
             break;
         case VK_PRIOR:
             SendMessage(hwnd, WM_VSCROLL, SB_PAGEUP, 0);
@@ -322,10 +322,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, 0);
             break;
         case VK_LEFT:
-            shiftBufferLeft(&gapbuffer);
+            shiftBufferLeft(&gapbuffer, &caret, ti);
             break;
         case VK_RIGHT:
-            shiftBufferRight(&gapbuffer);
+            shiftBufferRight(&gapbuffer, &caret, ti);
             break;
         }
         break;
@@ -342,7 +342,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
             switch (wParam) {
             case '\b':
-                deleteBufferChar(&gapbuffer);
+                deleteBufferChar(&gapbuffer, &caret, ti);
                 break;
                 // TEMPORARY BLOCK
             case '0':
@@ -353,7 +353,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 break;
                 // END OF TEMPORARY BLOCK
             default:
-                addBufferChar((TCHAR)wParam, &gapbuffer);
+                addBufferChar((TCHAR)wParam, &gapbuffer, &caret, ti);
                 break;
             }
         }
@@ -397,7 +397,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
-void addBufferChar(TCHAR ch, GapBuffer* gapbuffer) {
+void addBufferChar(TCHAR ch, GapBuffer* gapbuffer, Caret* caret, TextInfo ti) {
 
     if (gapbuffer->buffer >= gapbuffer->after_buffer) {
 
@@ -407,10 +407,12 @@ void addBufferChar(TCHAR ch, GapBuffer* gapbuffer) {
     gapbuffer->buffer[0] = ch;
     gapbuffer->buffer++;
     gapbuffer->buffer_index++;
+
+    adjustCaretPos(1, caret, *gapbuffer, ti);
     
 }
 
-void deleteBufferChar(GapBuffer* gapbuffer) {
+void deleteBufferChar(GapBuffer* gapbuffer, Caret* caret, TextInfo ti) {
 
     if (gapbuffer->buffer == gapbuffer->txt_start)
         return;
@@ -420,11 +422,31 @@ void deleteBufferChar(GapBuffer* gapbuffer) {
     // remove character from screen
     gapbuffer->buffer[0] = DELETE_CHAR;
 
+    
+    adjustCaretPos(-1, caret, *gapbuffer, ti);
+
 }
 
 // TODO
-void adjustCaretPos(Caret* caret, GapBuffer gb, int x_change, int y_change, TextInfo ti) {
+void adjustCaretPos(int change, Caret* caret, GapBuffer gb, TextInfo ti) {
 
+    caret->col += change * ti.tm.tmAveCharWidth;
+
+    if (caret->col > ti.maxLineWidth) {
+        caret->col = 0;
+        caret->row += ti.tm.tmHeight;
+    }
+    else if (caret->col < 0) {
+        caret->col = ti.maxLineWidth - ti.tm.tmAveCharWidth;
+        caret->row -= ti.tm.tmHeight;
+
+        if (caret->row < 0) {
+            caret->col = 0;
+            caret->row = 0;
+        }
+    }
+    
+    SetCaretPos(caret->col, caret->row);
 }
 
 // prints contents of gapbuffer, skipping empty buffer
@@ -510,7 +532,7 @@ int resizeBuffer(GapBuffer* gapbuffer) {
 }
 
 // shifts empty buffer to the left one character
-void shiftBufferLeft(GapBuffer *gapbuffer) {
+void shiftBufferLeft(GapBuffer *gapbuffer, Caret* caret, TextInfo ti) {
 
     // if buffer is at the start, can't shift left
     if (gapbuffer->buffer_index == 0) {
@@ -532,10 +554,12 @@ void shiftBufferLeft(GapBuffer *gapbuffer) {
     gapbuffer->buffer--;
     gapbuffer->buffer_index--;
     gapbuffer->after_buffer--;
+
+    adjustCaretPos(-1, caret, *gapbuffer, ti);
 }
 
 // shifts empty buffer to the right one character
-void shiftBufferRight(GapBuffer *gapbuffer) {
+void shiftBufferRight(GapBuffer *gapbuffer, Caret* caret, TextInfo ti) {
 
     // if buffer is at the end, can't shift right
     if ((gapbuffer->after_buffer-gapbuffer->txt_start) >= gapbuffer->size) {
@@ -557,6 +581,8 @@ void shiftBufferRight(GapBuffer *gapbuffer) {
     gapbuffer->buffer++;
     gapbuffer->buffer_index++;
     gapbuffer->after_buffer++;
+
+    adjustCaretPos(1, caret, *gapbuffer, ti);
 }
 
 // saves current gapbuffer contents to file (creating one if filename doesn't exist)
