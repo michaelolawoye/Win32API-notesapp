@@ -137,7 +137,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DEVCAPS.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="SYSMETS.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="TestingAPI.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

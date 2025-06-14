@@ -4,6 +4,7 @@
 #include <math.h>
 #include <limits.h>
 
+#include "resource.h"
 #include "DEVCAPS.h"
 
 
@@ -39,6 +40,7 @@ typedef struct gapBuffer {
 
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK DlgProc(HWND, UINT, WPARAM, LPARAM);
 void addBufferChar(TCHAR, GapBuffer*, Caret*, TextInfo);
 void deleteBufferChar(GapBuffer*, Caret*, TextInfo);
 void adjustCaretPos(int change, Caret*, GapBuffer, TextInfo);
@@ -50,26 +52,28 @@ int savetoFile(GapBuffer, char* filename);
 int readfromFile(GapBuffer*, char* filename);
 void clearBuffer(GapBuffer*);
 
-const TCHAR g_szClassName[] = TEXT("NotePad_App");
+HWND hDlgModeless;
+
+const TCHAR szClassName[] = TEXT("NotePadApp");
 
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow) {
 
     WNDCLASS wclass;
     HWND hwnd;
-    MSG Msg;
+    MSG msg;
 
     //Step 1: Registering the Window Class
-    wclass.style = CS_HREDRAW | CS_VREDRAW;
-    wclass.lpfnWndProc = WndProc;
-    wclass.cbClsExtra = 0;
-    wclass.cbWndExtra = 0;
-    wclass.hInstance = hInstance;
-    wclass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-    wclass.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wclass.hbrBackground = CreateSolidBrush(RGB(169, 169, 169));
-    wclass.lpszMenuName = NULL;
-    wclass.lpszClassName = g_szClassName;
+    wclass.style            = CS_HREDRAW | CS_VREDRAW;
+    wclass.lpfnWndProc      = WndProc;
+    wclass.cbClsExtra       = 0;
+    wclass.cbWndExtra       = 0;
+    wclass.hInstance        = hInstance;
+    wclass.hIcon            = LoadIcon(NULL, IDI_APPLICATION);
+    wclass.hCursor          = LoadCursor(NULL, IDC_ARROW);
+    wclass.hbrBackground    = CreateSolidBrush(RGB(200, 200, 200));
+    wclass.lpszMenuName     = szClassName;
+    wclass.lpszClassName    = szClassName;
 
     if (!RegisterClass(&wclass)) {
         MessageBox(NULL, TEXT("Window Registration Failed!"), TEXT("Error!"),
@@ -80,11 +84,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     // Step 2: Creating the Window
     hwnd = CreateWindowEx(
         WS_EX_CLIENTEDGE,
-        g_szClassName,
+        szClassName,
         TEXT("Text editor"),
         WS_OVERLAPPEDWINDOW | WS_VSCROLL | WS_HSCROLL,
         CW_USEDEFAULT, CW_USEDEFAULT, 500, 360,
         NULL, NULL, hInstance, NULL);
+
+    hDlgModeless = CreateDialog(hInstance, TEXT("DlgProc"), hwnd, DlgProc);
 
     if (hwnd == NULL) {
         MessageBox(NULL, TEXT("Window Creation Failed!"), TEXT("Error!"),
@@ -96,13 +102,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     UpdateWindow(hwnd);
 
     // Step 3: The Message Loop
-    while (GetMessage(&Msg, NULL, 0, 0) > 0) {
+    while (GetMessage(&msg, NULL, 0, 0) > 0) {
 
-        TranslateMessage(&Msg);
-        DispatchMessage(&Msg);
+        if (hDlgModeless == 0 || !IsDialogMessage(hDlgModeless, &msg)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
     }
 
-    return (int)Msg.wParam;
+    return (int)msg.wParam;
 }
 
 // Step 4: the Window Procedure
@@ -189,6 +197,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         ti.maxLineWidth = cxClient;
 
         return 0;
+    }
+
+    case WM_COMMAND:
+    {
+        // Menus
+        switch (LOWORD(wParam)) {
+        case ID_FILE_NEW:
+            clearBuffer(&gapbuffer);
+            MessageBeep(0);
+            break;
+
+        case ID_FILE_OPEN:
+        case ID_FILE_SAVE:
+        case ID_FILE_SAVEAS:
+            savetoFile(gapbuffer, (char*)"untitled.txt");
+            break;
+        }
     }
 
     case WM_VSCROLL:
@@ -366,6 +391,35 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
     }
 
+    case WM_MOUSEMOVE:
+    {
+        if (wParam & MK_SHIFT) {
+            hdc = GetDC(hwnd);
+            SetPixel(hdc, LOWORD(lParam), HIWORD(lParam), 0);
+
+            ReleaseDC(hwnd, hdc);
+        }
+        break;
+    }
+
+    case WM_RBUTTONDOWN:
+    {
+        int x = LOWORD(lParam);
+        int y = HIWORD(lParam);
+
+        TCHAR buff[10];
+
+        wsprintf(buff, TEXT("%d"), x);
+
+        hdc = GetDC(hwnd);
+
+        TextOut(hdc, x-20, y-20, buff, 3);
+
+        ReleaseDC(hwnd, hdc);
+        
+        break;
+    }
+
     case WM_SETFOCUS:
     {
         CreateCaret(hwnd, NULL, cxChar, cyChar);
@@ -393,6 +447,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
+    }
+    return 0;
+}
+
+LRESULT CALLBACK DlgProc(HWND hdlg, UINT msg, WPARAM wParam, LPARAM lParam) {
+
+    switch (msg) {
+
+    case WM_DESTROY:
+    {
+        DestroyWindow(hdlg);
+        hDlgModeless = NULL;
+        break;
+    }
     }
     return 0;
 }
@@ -644,7 +712,7 @@ int readfromFile(GapBuffer* gapbuffer, char* filename) {
 void clearBuffer(GapBuffer* gapbuffer) {
 
     for (int i = 0; i < gapbuffer->size; i++) {
-        gapbuffer->txt_start[i] = '\0';
+        gapbuffer->txt_start[i] = 0xFD;
     }
     TCHAR* temp = (TCHAR*)realloc(gapbuffer->txt_start, sizeof(TCHAR) * (BUF_SIZE + 1));
 
